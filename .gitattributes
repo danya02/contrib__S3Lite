@@ -1,0 +1,10 @@
+# Normalize line endings to LF in the repository
+* text=auto eol=lf
+
+# Treat binary files as binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.dll binary
+*.exe binary
+*.nupkg binary
