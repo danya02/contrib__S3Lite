@@ -72,7 +72,8 @@ namespace Test.Shared
                 new TestCaseDescriptor(suiteId, "ObjectDeleteMissing", "Object.DeleteAsync succeeds when the object is already missing using " + modeLabel, ct => TestSyntheticObjectDeleteMissingAsync(mode, ct)),
                 new TestCaseDescriptor(suiteId, "ObjectSpecialCharacterKey", "Object APIs round-trip keys with spaces using " + modeLabel, ct => TestSyntheticObjectSpecialCharacterKeyAsync(mode, ct)),
                 new TestCaseDescriptor(suiteId, "ObjectVersionIdParameter", "Object APIs accept versionId query parameters using " + modeLabel, ct => TestSyntheticObjectVersionIdParameterAsync(mode, ct)),
-                new TestCaseDescriptor(suiteId, "ObjectWriteMissingBucket", "Object.WriteAsync reports NoSuchBucket using " + modeLabel, ct => TestSyntheticObjectWriteMissingBucketAsync(mode, ct))
+                new TestCaseDescriptor(suiteId, "ObjectWriteMissingBucket", "Object.WriteAsync reports NoSuchBucket using " + modeLabel, ct => TestSyntheticObjectWriteMissingBucketAsync(mode, ct)),
+                new TestCaseDescriptor(suiteId, "GatewayRouting", "Gateway routing sends to the gateway host while signing for the upstream hostname using " + modeLabel, ct => TestSyntheticGatewayRoutingAsync(mode, ct)),
             };
 
             if (mode == RequestTransportMode.External)
@@ -545,6 +546,52 @@ namespace Test.Shared
                 AssertByteArraysEqual(payload, downloaded, "round-trip payload");
                 AssertFalse(server.ObjectExists(_SyntheticBucketName, key), "Deleted object should be removed from the synthetic server.");
             }, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static async Task TestSyntheticGatewayRoutingAsync(RequestTransportMode mode, CancellationToken cancellationToken)
+        {
+            await using S3LiteSyntheticServer server = await S3LiteSyntheticServer.StartAsync(cancellationToken).ConfigureAwait(false);
+            SeedSyntheticServer(server);
+
+            const string upstreamHostname = "s3.upstream.example";
+            HttpClient? httpClient = null;
+
+            try
+            {
+                if (mode == RequestTransportMode.External)
+                {
+                    httpClient = server.CreateHttpClient();
+                }
+
+                S3Client client = httpClient == null ? new S3Client() : new S3Client(httpClient);
+
+                client
+                    .WithHostname(upstreamHostname)
+                    .WithPort(443)
+                    .WithProtocol(ProtocolEnum.Https)
+                    .WithRegion(server.Region)
+                    .WithRequestStyle(RequestStyleEnum.PathStyle)
+                    .WithAccessKey("synthetic-access-key")
+                    .WithSecretKey("synthetic-secret-key")
+                    .WithGateway(new GatewayConfig
+                    {
+                        Hostname = server.Hostname,
+                        Port = server.Port,
+                        Protocol = ProtocolEnum.Http
+                    });
+
+                bool exists = await client.Bucket.ExistsAsync(_SyntheticBucketName, token: cancellationToken).ConfigureAwait(false);
+
+                AssertTrue(exists, "A request routed through the gateway host should reach the synthetic server.");
+                AssertEqual(
+                    server.Hostname + ":" + server.Port.ToString(),
+                    server.LastHostHeader,
+                    "The gateway should receive Host set to the gateway host; it is expected to rewrite Host to the upstream hostname before forwarding.");
+            }
+            finally
+            {
+                httpClient?.Dispose();
+            }
         }
 
         private static async Task TestSyntheticServiceListBucketsAsync(RequestTransportMode mode, CancellationToken cancellationToken)

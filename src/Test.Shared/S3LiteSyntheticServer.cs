@@ -26,6 +26,7 @@ namespace Test.Shared
         private readonly SerializationHelper _Serializer = new SerializationHelper();
         private int _Disposed = 0;
         private Task _ListenerTask = Task.CompletedTask;
+        private string? _LastHostHeader = null;
 
         private S3LiteSyntheticServer(int port)
         {
@@ -63,6 +64,18 @@ namespace Test.Shared
             get
             {
                 return _Region;
+            }
+        }
+
+        /// <summary>
+        /// Host header value presented on the most recently handled request.
+        /// Used to verify the Host header a gateway-routed request carries.
+        /// </summary>
+        internal string? LastHostHeader
+        {
+            get
+            {
+                return _LastHostHeader;
             }
         }
 
@@ -546,6 +559,7 @@ namespace Test.Shared
         {
             try
             {
+                _LastHostHeader = context.Request.UserHostName;
                 Uri requestUrl = context.Request.Url ?? throw new InvalidOperationException("Request URL is null.");
                 string absolutePath = Uri.UnescapeDataString(requestUrl.AbsolutePath ?? "/");
                 Dictionary<string, string> query = ParseQueryString(requestUrl.Query);
