@@ -885,24 +885,31 @@
             </summary>
         </member>
         <member name="T:S3Lite.GatewayConfig">
-             <summary>
-             Settings for routing requests through an intermediate gateway while signing for the upstream
-             <see cref="P:S3Lite.S3Client.Hostname" />.
-             Assign to <see cref="P:S3Lite.S3Client.Gateway" /> (or pass to <see cref="M:S3Lite.S3Client.WithGateway(S3Lite.GatewayConfig)" />) to enable gateway routing.
-            
-             This describes a reverse proxy / gateway: the request is sent to this host with its Host header set
-             to this host, so the gateway is expected to rewrite the Host header to <see cref="P:S3Lite.S3Client.Hostname" />
-             before forwarding upstream. The SigV4 signature stays bound to <see cref="P:S3Lite.S3Client.Hostname" />, so it
-             validates once the gateway has rewritten the Host header.
-            
-             This is NOT a forward/HTTP (CONNECT) proxy. For a forward proxy that preserves the upstream Host
-             end-to-end, leave this unset and supply an HttpClient configured with a WebProxy instead
-             (see <see cref="M:S3Lite.S3Client.WithHttpClient(System.Net.Http.HttpClient)" />).
-             </summary>
+            <summary>
+            Settings for routing requests through an intermediate reverse proxy / gateway while the SigV4 signature
+            stays bound to the upstream endpoint described by <see cref="P:S3Lite.S3Client.Hostname" />.
+            Assign to <see cref="P:S3Lite.S3Client.Gateway" /> (or pass to <see cref="M:S3Lite.S3Client.WithGateway(S3Lite.GatewayConfig)" />) to enable gateway routing.
+            <para>
+            When set, the request is sent to this gateway host with its Host header set to this gateway host. The
+            gateway is expected to rewrite the Host header to the authority the request was signed for - the upstream
+            request authority - before forwarding upstream. That signed authority is not necessarily
+            <see cref="P:S3Lite.S3Client.Hostname" /> verbatim: for virtual-hosted-style requests it is bucket-prefixed
+            (for example <c>bucket.s3.us-west-1.example.com</c>), and for path-style requests it is the bare endpoint
+            (for example <c>s3.us-west-1.example.com</c>), including a non-standard port when one is configured. The
+            SigV4 signature stays bound to that upstream authority, so it validates once the gateway has restored it.
+            </para>
+            <para>
+            This is NOT a forward/HTTP (CONNECT) proxy. For a forward proxy that preserves the upstream Host
+            end-to-end, leave this unset and supply an HttpClient configured with a WebProxy instead
+            (see <see cref="M:S3Lite.S3Client.WithHttpClient(System.Net.Http.HttpClient)" />).
+            </para>
+            </summary>
         </member>
         <member name="P:S3Lite.GatewayConfig.Hostname">
             <summary>
-            Gateway hostname that requests are sent to.
+            Gateway host that requests are sent to. This must be the bare gateway host only (for example
+            <c>s3.gateway.example.com</c>); supply the protocol and port separately via <see cref="P:S3Lite.GatewayConfig.Protocol" />
+            and <see cref="P:S3Lite.GatewayConfig.Port" />.
             When null or empty, no gateway routing is performed and requests go directly to <see cref="P:S3Lite.S3Client.Hostname" />.
             </summary>
         </member>
@@ -1085,10 +1092,11 @@
         </member>
         <member name="P:S3Lite.S3Client.Gateway">
             <summary>
-            Gateway settings used to route requests through an intermediate reverse proxy / gateway while
-            signing for <see cref="P:S3Lite.S3Client.Hostname" />. The gateway is expected to rewrite the Host header to
-            <see cref="P:S3Lite.S3Client.Hostname" /> before forwarding upstream. When null, requests are sent directly to
-            <see cref="P:S3Lite.S3Client.Hostname" />.
+            Gateway settings used to route requests through an intermediate reverse proxy / gateway while the
+            SigV4 signature stays bound to the upstream endpoint described by <see cref="P:S3Lite.S3Client.Hostname" />. The gateway
+            is expected to rewrite the Host header to the upstream request authority the signature was computed for
+            (bucket-prefixed for virtual-hosted-style, the bare endpoint - including any non-standard port - for
+            path-style) before forwarding upstream. When null, requests are sent directly to <see cref="P:S3Lite.S3Client.Hostname" />.
             This is not a forward/HTTP (CONNECT) proxy; for that, supply an HttpClient configured with a
             WebProxy via <see cref="M:S3Lite.S3Client.WithHttpClient(System.Net.Http.HttpClient)" /> and leave this null.
             </summary>
@@ -1215,9 +1223,11 @@
         <member name="M:S3Lite.S3Client.WithGateway(S3Lite.GatewayConfig)">
             <summary>
             Specify gateway settings used to route requests through an intermediate reverse proxy / gateway
-            while signing for <see cref="P:S3Lite.S3Client.Hostname" />. The gateway is expected to rewrite the Host header to
-            <see cref="P:S3Lite.S3Client.Hostname" /> before forwarding upstream. Pass null to send requests directly to
-            <see cref="P:S3Lite.S3Client.Hostname" />.
+            while the SigV4 signature stays bound to the upstream endpoint described by <see cref="P:S3Lite.S3Client.Hostname" />.
+            The gateway is expected to rewrite the Host header to the upstream request authority the signature
+            was computed for (bucket-prefixed for virtual-hosted-style, the bare endpoint - including any
+            non-standard port - for path-style) before forwarding upstream. Pass null to send requests directly
+            to <see cref="P:S3Lite.S3Client.Hostname" />.
             This is not a forward/HTTP (CONNECT) proxy; for that, supply an HttpClient configured with a
             WebProxy via <see cref="M:S3Lite.S3Client.WithHttpClient(System.Net.Http.HttpClient)" /> and leave this null.
             </summary>

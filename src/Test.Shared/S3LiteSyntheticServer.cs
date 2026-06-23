@@ -2,6 +2,7 @@ namespace Test.Shared
 {
     using System;
     using System.Collections.Generic;
+    using System.Collections.Specialized;
     using System.IO;
     using System.Linq;
     using System.Net;
@@ -27,6 +28,9 @@ namespace Test.Shared
         private int _Disposed = 0;
         private Task _ListenerTask = Task.CompletedTask;
         private string? _LastHostHeader = null;
+        private string? _LastHttpMethod = null;
+        private string? _LastRawPathAndQuery = null;
+        private NameValueCollection? _LastRequestHeaders = null;
 
         private S3LiteSyntheticServer(int port)
         {
@@ -76,6 +80,41 @@ namespace Test.Shared
             get
             {
                 return _LastHostHeader;
+            }
+        }
+
+        /// <summary>
+        /// HTTP method of the most recently handled request.
+        /// </summary>
+        internal string? LastHttpMethod
+        {
+            get
+            {
+                return _LastHttpMethod;
+            }
+        }
+
+        /// <summary>
+        /// Raw (still percent-encoded) path and query of the most recently handled request.
+        /// Used to reconstruct the upstream URL a gateway-routed request was signed against.
+        /// </summary>
+        internal string? LastRawPathAndQuery
+        {
+            get
+            {
+                return _LastRawPathAndQuery;
+            }
+        }
+
+        /// <summary>
+        /// Headers presented on the most recently handled request.
+        /// Used to recompute the SigV4 signature a gateway-routed request carries.
+        /// </summary>
+        internal NameValueCollection? LastRequestHeaders
+        {
+            get
+            {
+                return _LastRequestHeaders;
             }
         }
 
@@ -560,7 +599,10 @@ namespace Test.Shared
             try
             {
                 _LastHostHeader = context.Request.UserHostName;
+                _LastHttpMethod = context.Request.HttpMethod;
+                _LastRequestHeaders = new NameValueCollection(context.Request.Headers);
                 Uri requestUrl = context.Request.Url ?? throw new InvalidOperationException("Request URL is null.");
+                _LastRawPathAndQuery = requestUrl.PathAndQuery;
                 string absolutePath = Uri.UnescapeDataString(requestUrl.AbsolutePath ?? "/");
                 Dictionary<string, string> query = ParseQueryString(requestUrl.Query);
 

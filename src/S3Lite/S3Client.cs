@@ -181,10 +181,11 @@ namespace S3Lite
         }
 
         /// <summary>
-        /// Gateway settings used to route requests through an intermediate reverse proxy / gateway while
-        /// signing for <see cref="Hostname" />. The gateway is expected to rewrite the Host header to
-        /// <see cref="Hostname" /> before forwarding upstream. When null, requests are sent directly to
-        /// <see cref="Hostname" />.
+        /// Gateway settings used to route requests through an intermediate reverse proxy / gateway while the
+        /// SigV4 signature stays bound to the upstream endpoint described by <see cref="Hostname" />. The gateway
+        /// is expected to rewrite the Host header to the upstream request authority the signature was computed for
+        /// (bucket-prefixed for virtual-hosted-style, the bare endpoint - including any non-standard port - for
+        /// path-style) before forwarding upstream. When null, requests are sent directly to <see cref="Hostname" />.
         /// This is not a forward/HTTP (CONNECT) proxy; for that, supply an HttpClient configured with a
         /// WebProxy via <see cref="WithHttpClient" /> and leave this null.
         /// </summary>
@@ -420,9 +421,11 @@ namespace S3Lite
 
         /// <summary>
         /// Specify gateway settings used to route requests through an intermediate reverse proxy / gateway
-        /// while signing for <see cref="Hostname" />. The gateway is expected to rewrite the Host header to
-        /// <see cref="Hostname" /> before forwarding upstream. Pass null to send requests directly to
-        /// <see cref="Hostname" />.
+        /// while the SigV4 signature stays bound to the upstream endpoint described by <see cref="Hostname" />.
+        /// The gateway is expected to rewrite the Host header to the upstream request authority the signature
+        /// was computed for (bucket-prefixed for virtual-hosted-style, the bare endpoint - including any
+        /// non-standard port - for path-style) before forwarding upstream. Pass null to send requests directly
+        /// to <see cref="Hostname" />.
         /// This is not a forward/HTTP (CONNECT) proxy; for that, supply an HttpClient configured with a
         /// WebProxy via <see cref="WithHttpClient" /> and leave this null.
         /// </summary>
@@ -605,13 +608,16 @@ namespace S3Lite
 
             if (_Gateway != null && !String.IsNullOrEmpty(_Gateway.Hostname))
             {
-                // Redirect the connection (scheme/host/port) to the gateway while the signature stays
-                // bound to Hostname. The transport derives the Host header from this URL, so the gateway
-                // receives Host = the gateway host and is expected to rewrite it to Hostname before
-                // forwarding upstream (the corporate reverse-proxy case). The path, query, body, and
-                // signature are unchanged.
+                // Redirect the connection (scheme/host/port) to the gateway while the signature stays bound to
+                // the upstream request authority. The signature was already computed above from req.Url (the
+                // upstream URL), so its signed Host is the upstream authority - bucket.s3.region.hostname for
+                // virtual-hosted-style, or s3.region.hostname[:port] for path-style - not necessarily Hostname
+                // verbatim. The transport derives the Host header from this rewritten URL, so the gateway
+                // receives Host = the gateway host and is expected to rewrite it back to that upstream authority
+                // before forwarding upstream (the corporate reverse-proxy case). Only scheme/host/port change
+                // here; the path, query, body, and signature are untouched.
                 //
-                // This is not a forward/CONNECT proxy. For a forward proxy that must preserve Host = Hostname
+                // This is not a forward/CONNECT proxy. For a forward proxy that must preserve the upstream Host
                 // end-to-end, leave Gateway null and supply an HttpClient configured with a WebProxy
                 // (see WithHttpClient).
                 int gatewayPort = _Gateway.Port > 0 ? _Gateway.Port : _Port;

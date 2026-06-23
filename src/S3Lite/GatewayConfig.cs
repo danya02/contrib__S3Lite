@@ -3,25 +3,32 @@ using System;
 namespace S3Lite
 {
     /// <summary>
-    /// Settings for routing requests through an intermediate gateway while signing for the upstream
-    /// <see cref="S3Client.Hostname" />.
+    /// Settings for routing requests through an intermediate reverse proxy / gateway while the SigV4 signature
+    /// stays bound to the upstream endpoint described by <see cref="S3Client.Hostname" />.
     /// Assign to <see cref="S3Client.Gateway" /> (or pass to <see cref="S3Client.WithGateway" />) to enable gateway routing.
-    ///
-    /// This describes a reverse proxy / gateway: the request is sent to this host with its Host header set
-    /// to this host, so the gateway is expected to rewrite the Host header to <see cref="S3Client.Hostname" />
-    /// before forwarding upstream. The SigV4 signature stays bound to <see cref="S3Client.Hostname" />, so it
-    /// validates once the gateway has rewritten the Host header.
-    ///
+    /// <para>
+    /// When set, the request is sent to this gateway host with its Host header set to this gateway host. The
+    /// gateway is expected to rewrite the Host header to the authority the request was signed for - the upstream
+    /// request authority - before forwarding upstream. That signed authority is not necessarily
+    /// <see cref="S3Client.Hostname" /> verbatim: for virtual-hosted-style requests it is bucket-prefixed
+    /// (for example <c>bucket.s3.us-west-1.example.com</c>), and for path-style requests it is the bare endpoint
+    /// (for example <c>s3.us-west-1.example.com</c>), including a non-standard port when one is configured. The
+    /// SigV4 signature stays bound to that upstream authority, so it validates once the gateway has restored it.
+    /// </para>
+    /// <para>
     /// This is NOT a forward/HTTP (CONNECT) proxy. For a forward proxy that preserves the upstream Host
     /// end-to-end, leave this unset and supply an HttpClient configured with a WebProxy instead
     /// (see <see cref="S3Client.WithHttpClient" />).
+    /// </para>
     /// </summary>
     public class GatewayConfig
     {
         #region Public-Members
 
         /// <summary>
-        /// Gateway hostname that requests are sent to.
+        /// Gateway host that requests are sent to. This must be the bare gateway host only (for example
+        /// <c>s3.gateway.example.com</c>); supply the protocol and port separately via <see cref="Protocol" />
+        /// and <see cref="Port" />.
         /// When null or empty, no gateway routing is performed and requests go directly to <see cref="S3Client.Hostname" />.
         /// </summary>
         public string Hostname { get; set; } = null;
